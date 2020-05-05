@@ -207,49 +207,50 @@ function buffer_depot:make_request()
   if not self:can_spawn_drone() then return end
   if not self:should_order() then return end
   
-  local supply_depots = self.road_network.get_supply_depots(self.network_id, name)
+  local supply_depots = self.road_network.get_supply_depots(self.network_id, name) -- Gets all supply depots, buffers included
   if not supply_depots then return end
 
-  local request_size = self:get_request_size()
-  local minimum_size = self:get_minimum_request_size()
-  local stack_size = self:get_stack_size()
+  local request_size = self:get_request_size() -- The amount a single drone can carry per trip (for fluids it is drone_fluid_capacity * technologyBonus, and for items it is item.stackSize * technologyBonus)
+  local stack_size = self:get_stack_size() -- The item stack size, or the drone_fluid_capacity for fluids
 
   local node_position = self.node_position
   local heuristic = function(depot, count)
     if depot.is_buffer_depot then return big end
     local amount = min(count, request_size)
-    if amount < minimum_size then
-      return big
-    end
     return distance(depot.node_position, node_position) - ((amount / request_size) * item_heuristic_bonus)
   end
   
+  local minimum_size = self:get_minimum_request_size() -- The minimum item amount for this trip so the drones don't do trips for few items, except when depot is almost full
   local best_buffer
   local best_index
   local lowest_score = big
   local get_depot = self.get_depot
-    
-  for depot_index, count in pairs (supply_depots) do
-    local depot = get_depot(depot_index)
-    if depot then
-      local score = heuristic(depot, count)
-      if score < lowest_score then
-        best_buffer = depot
-        lowest_score = score
-        best_index = depot_index
+  
+  for depot_index, count in pairs (supply_depots) do -- Find the best supply depot that can offer the minimum_request_size needed
+    if count >= minimum_size then
+      local depot = get_depot(depot_index)
+      if depot then
+        local score = heuristic(depot, count)
+        if score < lowest_score then
+          best_buffer = depot
+          lowest_score = score
+          best_index = depot_index
+        end
       end
     end
   end
 
   if not best_buffer then return end
 
-  local count = supply_depots[best_index]
-  if request_size >= count then
+  local count = supply_depots[best_index] -- Gets the amount available at the best supply depot
+  local amount_to_pickup = min(amount_required, request_size)
+  
+  if amount_to_pickup >= count then
     supply_depots[best_index] = nil
     self:dispatch_drone(best_buffer, count)
   else
-    supply_depots[best_index] = count - request_size
-    self:dispatch_drone(best_buffer, request_size)
+    supply_depots[best_index] = count - amount_to_pickup
+    self:dispatch_drone(best_buffer, amount_to_pickup)
   end
 
 end
@@ -340,7 +341,7 @@ function buffer_depot:get_output_inventory()
   return self.entity.get_output_inventory()
 end
 
-function buffer_depot:get_drone_inventory()
+function buffer_depot:get_input_inventory()
   return self.entity.get_inventory(defines.inventory.assembling_machine_input)
 end
 
@@ -357,7 +358,7 @@ function buffer_depot:can_spawn_drone()
 end
 
 function buffer_depot:get_drone_item_count()
-  return self:get_drone_inventory().get_item_count("transport-drone")
+  return self:get_input_inventory().get_item_count("transport-drone")
 end
 
 function buffer_depot:get_output_fluidbox()
@@ -395,29 +396,58 @@ function buffer_depot:get_available_stack_amount()
 end
 
 function buffer_depot:get_minimum_request_size(minus_one)
-  local stack_size = self:get_stack_size()
-  local drone_count = self:get_active_drone_count()
+  local stack_size = self:get_stack_size() -- The item stack size, or the drone_fluid_capacity for fluids
+  local drone_count = self:get_active_drone_count() -- The amount of drones already picking up supplies
   if minus_one then drone_count = drone_count - 1 end
-  local current_amount = self:get_current_amount()
-  if current_amount < stack_size and drone_count == 0 then 
+  local current_amount = self:get_current_amount() -- The amount already available at the machine output
+  local requested_amount = self:get_requested_amount(); -- The amount of request-amount-controller in the depot's input
+
+  local required_amount = requested_amount - (current_amount + (stack_size * drone_count))  -- The amount required to fill the depot
+
+  if required_amount < stack_size and drone_count == 0 then
     return 1
   end
-  local request_size = self:get_request_size()
-  if current_amount < request_size then
+  local request_size = self:get_request_size() -- The amount a single drone can carry per trip (for fluids it is drone_fluid_capacity * technologyBonus, and for items it is item.stackSize * technologyBonus)
+  if required_amount < request_size then
     return stack_size
   end
   return request_size
 end
 
+function request_depot:get_requested_amount()
+  return self:get_input_inventory().get_item_count("request-amount-controller")
+end
+
 function buffer_depot:should_order(plus_one)
-  if self:get_fuel_amount() < fuel_amount_per_drone then
+
+  if self:get_fuel_amount() < fuel_amount_per_drone then -- if fuel is not enough for one drone, there is no way to order supplies
     return
   end
-  local stack_size = self:get_request_size()
-  local current_count = self:get_current_amount()
-  local max_count = self:get_drone_item_count()
-  local drone_spawn_count = max_count - math.floor(current_count / stack_size)
-  return drone_spawn_count + (plus_one and 1 or 0) > self:get_active_drone_count()
+
+  -- gcascaes version
+
+  local stack_size = self:get_request_size() -- The amount a single drone can carry per trip (for fluids it is drone_fluid_capacity * technologyBonus, and for items it is item.stackSize * technologyBonus)
+  local current_count = self:get_current_amount() -- The amount already available at the machine output
+  local requested_amount = self:get_requested_amount(); -- The amount of request-amount-controller in the depot's input
+
+  if current_count >= requested_amount then return end -- If already full there is no need to order supplies
+
+  local total_drones_count = self:get_drone_item_count() -- The total amount of drones placed in the depot
+  local active_drones_count = self:get_active_drone_count() -- The amount of drones already picking up supplies
+  local available_drones_count = total_drones_count - active_drones_count -- The amount of drones available to pickup supplies
+
+  if available_drones_count <= 0 then return end -- If no drone is available, there is no way to order supplies
+
+  return current_count + (stack_size * active_drones_count) < requested_amount -- If the current amount plus the amount being picked up by active drones is enough to fulfill request amount, then we don't need to send more drones
+
+  -- Klonan version
+
+  -- local stack_size = self:get_request_size() -- The amount a single drone can carry per trip (for fluids it is drone_fluid_capacity, and for items it is item.stackSize * technologyBonus)
+  -- local current_count = self:get_current_amount() -- The amount already available at the machine output
+  -- local max_count = self:get_drone_item_count() -- The amount of drones placed in the depot
+  -- local drone_spawn_count = max_count - math.floor(current_count / stack_size) -- It defines the request_amount as stack_size * max_count, and assuming this it calculates how many drone trips are required to fill the output
+  -- return drone_spawn_count + (plus_one and 1 or 0) > self:get_active_drone_count() -- It compares how many drone trips are required to fulfill the request amount (stack_size * max_count) to the amount of drones already out there gathering resources
+
 end
 
 local min = math.min
@@ -506,7 +536,7 @@ end
 function buffer_depot:remove_drone(drone, remove_item)
   self.drones[drone.index] = nil
   if remove_item then
-    self:get_drone_inventory().remove{name = "transport-drone", count = 1}
+    self:get_input_inventory().remove{name = "transport-drone", count = 1}
   end
   self:update_sticker()
 end

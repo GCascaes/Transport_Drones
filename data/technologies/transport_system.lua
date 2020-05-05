@@ -38,6 +38,34 @@ local transport_system =
     {
       type = "unlock-recipe",
       recipe = "road"
+    },
+    {
+      type = "unlock-recipe",
+      recipe = "request-amount-controller-x1"
+    },
+    {
+      type = "unlock-recipe",
+      recipe = "request-amount-controller-x10"
+    },
+    {
+      type = "unlock-recipe",
+      recipe = "request-amount-controller-x100"
+    },
+    {
+      type = "unlock-recipe",
+      recipe = "request-amount-controller-x1k"
+    },
+    {
+      type = "unlock-recipe",
+      recipe = "request-amount-controller-x10k"
+    },
+    {
+      type = "unlock-recipe",
+      recipe = "request-amount-controller-x100k"
+    },
+    {
+      type = "unlock-recipe",
+      recipe = "request-amount-controller-void"
     }
   },
   prerequisites = {"engine", "oil-processing"},
