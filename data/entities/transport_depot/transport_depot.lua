@@ -6,7 +6,7 @@ local category =
   type = "item-subgroup",
   name = "transport-drones",
   group = "logistics",
-  order = "ez"
+  order = "eza"
 }
 
 data:extend{category}

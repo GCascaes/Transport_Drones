@@ -253,7 +253,7 @@ function transport_drone:process_pickup()
   
   local available_count = self.supply_depot:get_available_item_count(self.request_depot.item)
 
-  local to_take = min(available_count, self.requested_count, self.request_depot:get_request_size()) -- TODO atualizar o requested_count? Pois o depot pode ter enchido mais enquanto o drone estava a caminho
+  local to_take = min(available_count, self.requested_count, self.request_depot:get_request_size())
 
   if to_take > 0 then
 
