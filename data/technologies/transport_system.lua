@@ -61,10 +61,6 @@ local transport_system =
     },
     {
       type = "unlock-recipe",
-      recipe = "request-amount-controller-x100k"
-    },
-    {
-      type = "unlock-recipe",
       recipe = "request-amount-controller-void"
     }
   },

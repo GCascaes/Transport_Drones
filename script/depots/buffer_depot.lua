@@ -242,8 +242,13 @@ function buffer_depot:make_request()
 
   if not best_buffer then return end
 
+  local drone_count = self:get_active_drone_count() -- The amount of drones already picking up supplies
+  local current_amount = self:get_current_amount() -- The amount already available at the machine output
+  local requested_amount = self:get_requested_amount(); -- The amount of request-amount-controller in the depot's input
+  local required_amount = requested_amount - (current_amount + (stack_size * drone_count)) -- The amount required to fill the depot
+
   local count = supply_depots[best_index] -- Gets the amount available at the best supply depot
-  local amount_to_pickup = min(amount_required, request_size)
+  local amount_to_pickup = min(required_amount, request_size)
   
   if amount_to_pickup >= count then
     supply_depots[best_index] = nil
@@ -414,7 +419,7 @@ function buffer_depot:get_minimum_request_size(minus_one)
   return request_size
 end
 
-function request_depot:get_requested_amount()
+function buffer_depot:get_requested_amount()
   return self:get_input_inventory().get_item_count("request-amount-controller")
 end
 
