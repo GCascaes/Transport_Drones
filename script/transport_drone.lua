@@ -274,8 +274,8 @@ function transport_drone:process_pickup()
     return
   end
   
-  local available_count = self.reserved_count + self.supply_depot:get_available_item_count(self.request_depot.item)
-  local to_take = min(available_count, self.desired_count, self.request_depot:get_request_size())
+  local available_count = (self.reserved_count or 0) + self.supply_depot:get_available_item_count(self.request_depot.item)
+  local to_take = min(available_count, (self.desired_count or 0), self.request_depot:get_request_size())
 
   local sprite_switch = false
 
@@ -313,7 +313,7 @@ function transport_drone:return_to_requester(sprite_switch)
 
   if self.state == states.going_to_supply then
     if self.supply_depot and self.request_depot.item then
-      self.supply_depot:add_to_be_taken(self.request_depot.item, -self.reserved_count)
+      self.supply_depot:add_to_be_taken(self.request_depot.item, -(self.reserved_count or 0))
     end
   end
 
@@ -634,7 +634,7 @@ end
 
 function transport_drone:clear_drone_data()
   if self.state == states.going_to_supply then
-    self.supply_depot:add_to_be_taken(self.request_depot.item, -self.reserved_count)
+    self.supply_depot:add_to_be_taken(self.request_depot.item, -(self.reserved_count or 0))
   end
 
   if self.state == states.delivering_fuel then
