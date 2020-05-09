@@ -396,7 +396,7 @@ end
 local min = math.min
 function request_depot:dispatch_drone(depot, reserved_count, desired_count)
   
-  local drone = self.transport_drone.new(self)
+  local drone = self.transport_drone.new(self, self.item)
   drone:pickup_from_supply(depot, reserved_count, desired_count)
   self:remove_fuel(fuel_amount_per_drone)
 

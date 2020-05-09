@@ -22,7 +22,7 @@ if not data.raw.fluid[fuel] then
 end
 
 local category = "transport-drone-request"
-local util = require("tf_util/tf_util")
+local util = require("__Transport_Drones__/data/tf_util/tf_util")
 local shared = require("shared")
 
 local recipes = data.raw.recipe
@@ -127,7 +127,7 @@ local make_fluid_request_recipe = function(fluid)
     {
       {type = "item", name = "transport-drone", amount = 1},
       {type = "item", name = "request-amount-controller", amount = 1},
-      {type = "fluid", name = fuel, amount = 5000}
+      {type = "fluid", name = fuel, amount = 10000}
     },
     results =
     {
