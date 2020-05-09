@@ -101,7 +101,8 @@ transport_drone.new = function(request_depot)
     request_depot = request_depot,
     index = tostring(entity.unit_number),
     state = 0,
-    requested_count = 0,
+    reserved_count = 0,
+    desired_count = 0,
     tick_created = game.tick
   }
   setmetatable(drone, transport_drone.metatable)
@@ -124,10 +125,11 @@ function transport_drone:add_slow_sticker()
   self.entity.surface.create_entity{name = "drone-slowdown-sticker", position = self.entity.position, target = self.entity, force = "neutral"}
 end
 
-function transport_drone:pickup_from_supply(supply, count)
+function transport_drone:pickup_from_supply(supply, reserved_count, desired_count)
   self.supply_depot = supply
-  self.requested_count = count
-  self.supply_depot:add_to_be_taken(self.request_depot.item, count)
+  self.reserved_count = reserved_count
+  self.desired_count = desired_count
+  self.supply_depot:add_to_be_taken(self.request_depot.item, reserved_count)
 
   self:add_slow_sticker()
   self:update_speed()
@@ -251,14 +253,13 @@ function transport_drone:process_pickup()
     return
   end
   
-  local available_count = self.supply_depot:get_available_item_count(self.request_depot.item)
-
-  local to_take = min(available_count, self.requested_count, self.request_depot:get_request_size())
+  local available_count = self.reserved_count + self.supply_depot:get_available_item_count(self.request_depot.item)
+  local to_take = min(available_count, self.desired_count, self.request_depot:get_request_size())
 
   if to_take > 0 then
 
     local given_count = self.supply_depot:give_item(self.request_depot.item, to_take)
-
+    
     if given_count > 0 then
       self.held_item = self.request_depot.item
       self.held_count = given_count
@@ -288,7 +289,7 @@ function transport_drone:return_to_requester()
 
   if self.state == states.going_to_supply then
     if self.supply_depot and self.request_depot.item then
-      self.supply_depot:add_to_be_taken(self.request_depot.item, -self.requested_count)
+      self.supply_depot:add_to_be_taken(self.request_depot.item, -self.reserved_count)
     end
   end
 
@@ -488,7 +489,7 @@ function transport_drone:process_reorder()
     return
   end
 
-  local item_count = min(self.request_depot:get_request_size(), self.supply_depot:get_available_item_count(self.request_depot.item))
+  local item_count = min(self.request_depot:get_request_size(), self.supply_depot:get_available_item_count(self.request_depot.item), self.desired_count)
   if item_count <= self.request_depot:get_minimum_request_size(true) then 
     self:remove_from_depot()
     return
@@ -496,7 +497,7 @@ function transport_drone:process_reorder()
   
   self.request_depot:remove_fuel(fuel_amount_per_drone)
   self.tick_created = game.tick
-  self:pickup_from_supply(self.supply_depot, item_count)
+  self:pickup_from_supply(self.supply_depot, item_count, item_count)
 
 end
 
@@ -573,7 +574,7 @@ end
 
 function transport_drone:clear_drone_data()
   if self.state == states.going_to_supply then
-    self.supply_depot:add_to_be_taken(self.request_depot.item, -self.requested_count)
+    self.supply_depot:add_to_be_taken(self.request_depot.item, -self.reserved_count)
   end
 
   if self.state == states.delivering_fuel then
@@ -757,9 +758,9 @@ transport_drone.on_configuration_changed = function()
     script_data.reset_to_be_taken_again = true
     for k, drone in pairs (script_data.drones) do
       if drone.state == states.going_to_supply then
-        local count = math.min(tonumber(drone.requested_count) or 0, drone.request_depot:get_request_size())
+        local count = math.min(tonumber(drone.reserved_count) or 0, drone.request_depot:get_request_size())
         if count ~= count then count = drone.request_depot:get_request_size() end
-        drone:pickup_from_supply(drone.supply_depot, count)
+        drone:pickup_from_supply(drone.supply_depot, count, count)
       end
     end
   end

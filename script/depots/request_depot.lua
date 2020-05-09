@@ -137,15 +137,12 @@ function request_depot:get_minimum_request_size(minus_one)
   if minus_one then drone_count = drone_count - 1 end
   local current_amount = self:get_current_amount() -- The amount already available at the machine output
   local requested_amount = self:get_requested_amount(); -- The amount of request-amount-controller in the depot's input
-
+  local request_size = self:get_request_size() -- The amount a single drone can carry per trip (for fluids it is drone_fluid_capacity * technologyBonus, and for items it is item.stackSize * technologyBonus)
+  
   local required_amount = requested_amount - (current_amount + (stack_size * drone_count))  -- The amount required to fill the depot
 
-  if required_amount < stack_size and drone_count == 0 then
+  if required_amount <= request_size then
     return 1
-  end
-  local request_size = self:get_request_size() -- The amount a single drone can carry per trip (for fluids it is drone_fluid_capacity * technologyBonus, and for items it is item.stackSize * technologyBonus)
-  if required_amount < request_size then
-    return stack_size
   end
   return request_size
 end
@@ -210,14 +207,14 @@ function request_depot:make_request()
   local required_amount = requested_amount - (current_amount + (stack_size * drone_count)) -- The amount required to fill the depot
 
   local count = supply_depots[best_index] -- Gets the amount available at the best supply depot
-  local amount_to_pickup = min(required_amount, request_size) -- TODO amount_required is nil
+  local amount_to_pickup = min(required_amount, request_size)
 
   if amount_to_pickup >= count then
     supply_depots[best_index] = nil
-    self:dispatch_drone(best_buffer, count)
+    self:dispatch_drone(best_buffer, count, amount_to_pickup)
   else
     supply_depots[best_index] = count - amount_to_pickup
-    self:dispatch_drone(best_buffer, amount_to_pickup)
+    self:dispatch_drone(best_buffer, amount_to_pickup, amount_to_pickup)
   end
 
 end
@@ -397,10 +394,10 @@ function request_depot:should_order(plus_one)
 end
 
 local min = math.min
-function request_depot:dispatch_drone(depot, count)
+function request_depot:dispatch_drone(depot, reserved_count, desired_count)
   
   local drone = self.transport_drone.new(self)
-  drone:pickup_from_supply(depot, count)
+  drone:pickup_from_supply(depot, reserved_count, desired_count)
   self:remove_fuel(fuel_amount_per_drone)
 
   self.drones[drone.index] = drone
